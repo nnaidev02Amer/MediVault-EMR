@@ -7,6 +7,7 @@ const validateApp = require("../middleware/validate.middleware");
 const {
   createAppointmentSchema,
   updateAppointmentSchema,
+  rescheduleAppointmentSchema,
 } = require("../validators/schemas");
 
 routerApp.use(authenticate);
@@ -27,6 +28,12 @@ routerApp.post(
   "/:id/arrive",
   authorize("SUPER_ADMIN", "RECEPTIONIST"),
   appointmentController.markArrived,
+);
+routerApp.post(
+  "/:id/reschedule",
+  authorize("SUPER_ADMIN", "RECEPTIONIST"),
+  validateApp(rescheduleAppointmentSchema),
+  appointmentController.reschedule,
 );
 routerApp.delete(
   "/:id",

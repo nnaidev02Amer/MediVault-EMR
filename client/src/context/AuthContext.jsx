@@ -29,26 +29,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const signup = async (name, email, password, role = "RECEPTIONIST") => {
-    setLoading(true);
-    try {
-      const res = await api.post("/auth/signup", {
-        name,
-        email,
-        password,
-        role,
-      });
-      const { accessToken, refreshToken, user: userData } = res.data.data;
-      localStorage.setItem("accessToken", accessToken);
-      localStorage.setItem("refreshToken", refreshToken);
-      localStorage.setItem("user", JSON.stringify(userData));
-      setUser(userData);
-      return userData;
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const logout = async () => {
     try {
       await api.post("/auth/logout");
@@ -63,7 +43,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const value = useMemo(
-    () => ({ user, login, signup, logout, loading }),
+    () => ({ user, login, logout, loading }),
     [user, loading],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

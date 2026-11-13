@@ -6,8 +6,8 @@ const getSlots = async (req, res, next) => {
     if (!doctorId || !date) {
       return res.status(400).json({ success: false, message: 'doctorId and date parameters are required' });
     }
-    const slots = await slotService.getAvailableSlots(doctorId, date);
-    res.json({ success: true, data: slots });
+    const { slots, reason } = await slotService.getAvailability(doctorId, date);
+    res.json({ success: true, data: slots, message: reason });
   } catch (error) {
     next(error);
   }

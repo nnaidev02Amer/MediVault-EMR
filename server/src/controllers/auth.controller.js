@@ -22,59 +22,14 @@ const buildAuthTokens = (user) => {
   return { accessToken, refreshToken };
 };
 
-const signup = async (req, res, next) => {
-  try {
-    const { name, email, password, role = "RECEPTIONIST" } = req.body;
-    const safeRole = ["RECEPTIONIST", "DOCTOR"].includes(role)
-      ? role
-      : "RECEPTIONIST";
-
-    const user = await User.create({
-      name,
-      email: email.toLowerCase(),
-      password,
-      role: safeRole,
-    });
-
-    const { accessToken, refreshToken } = buildAuthTokens(user);
-    user.refreshToken = refreshToken;
-    await user.save();
-
-    await logAudit({
-      user: { id: user._id, role: user.role },
-      action: "USER_SIGNUP",
-      entity: "User",
-      entityId: user._id,
-    });
-
-    res.status(201).json({
-      success: true,
-      message: "Account created successfully",
-      data: {
-        accessToken,
-        refreshToken,
-        user: {
-          id: user._id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-        },
-      },
-    });
-  } catch (error) {
-    if (error.code === 11000)
-      return res.status(409).json({
-        success: false,
-        message: "A user with this email already exists",
-      });
-    if (error.message === "Authentication secrets are not configured")
-      return res.status(500).json({
-        success: false,
-        message: "Authentication secrets are not configured",
-      });
-    next(error);
-  }
-};
+// Accounts may only be created by a Super Admin via POST /api/v1/users.
+// Public self-registration would let anyone mint DOCTOR/RECEPTIONIST access.
+const signup = (req, res) =>
+  res.status(403).json({
+    success: false,
+    message:
+      "Self-registration is disabled. Ask a Super Admin to create your account.",
+  });
 
 const login = async (req, res, next) => {
   try {
@@ -143,10 +98,12 @@ const refresh = async (req, res, next) => {
         message: "Authentication secrets are not configured",
       });
     }
-    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET, {
+      algorithms: ["HS256"],
+    });
     const user = await User.findById(decoded.id).select("+refreshToken");
 
-    if (!user || user.refreshToken !== refreshToken) {
+    if (!user || !user.isActive || user.refreshToken !== refreshToken) {
       return res
         .status(401)
         .json({ success: false, message: "Invalid refresh token" });

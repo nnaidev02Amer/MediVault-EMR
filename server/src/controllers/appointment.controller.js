@@ -57,6 +57,12 @@ const update = async (req, res, next) => {
             message: "You may only update your assigned appointments",
           });
       }
+      if (status === "Completed" && appointment.status === "Cancelled") {
+        return res.status(409).json({
+          success: false,
+          message: "A cancelled appointment cannot be completed",
+        });
+      }
       if (
         purpose !== undefined ||
         (status !== undefined && status !== "Completed")
@@ -116,6 +122,11 @@ const markArrived = async (req, res, next) => {
         .status(404)
         .json({ success: false, message: "Appointment not found" });
 
+    if (appointment.status !== "Scheduled")
+      return res.status(409).json({
+        success: false,
+        message: `Only scheduled appointments can be marked as arrived (this one is ${appointment.status.toLowerCase()})`,
+      });
     appointment.status = "Arrived";
     await appointment.save();
 
@@ -151,6 +162,11 @@ const cancel = async (req, res, next) => {
         .status(404)
         .json({ success: false, message: "Appointment not found" });
 
+    if (appointment.status === "Completed")
+      return res.status(409).json({
+        success: false,
+        message: "A completed appointment cannot be cancelled",
+      });
     appointment.status = "Cancelled";
     await appointment.save();
 
@@ -180,4 +196,22 @@ const cancel = async (req, res, next) => {
   }
 };
 
-module.exports = { create, getAll, update, markArrived, cancel };
+const reschedule = async (req, res, next) => {
+  try {
+    const appointment = await appointmentService.rescheduleAppointment(
+      req.params.id,
+      req.body,
+      req.user,
+      req.app.get("socketio"),
+    );
+    res.json({
+      success: true,
+      message: "Appointment rescheduled successfully",
+      data: appointment,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { create, getAll, update, markArrived, cancel, reschedule };

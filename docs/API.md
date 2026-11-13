@@ -1,30 +1,58 @@
 # API reference
 
-Base URL: `http://localhost:5000/api/v1`. Protected routes require `Authorization: Bearer <accessToken>`. Responses use `{ success, data, message? }` unless an error is returned. Liveness check is `GET /health`.
+Base URL: `http://localhost:5000/api/v1`. Protected routes require `Authorization: Bearer <accessToken>`. Responses use `{ success, data, message? }`; errors use `{ success: false, message, errors? }`. Liveness check: `GET /health`.
+
+Roles: `SUPER_ADMIN`, `RECEPTIONIST`, `DOCTOR`. The role is always read from the database on each request (not trusted from the token), and deactivated users are rejected.
 
 ## Authentication
 
-- `POST /auth/login` — `{ email, password }`; returns access token, refresh token, and safe user fields.
-- `POST /auth/refresh` — `{ refreshToken }`; returns a fresh access token.
+- `POST /auth/login` — `{ email, password }`; returns access token, refresh token and safe user fields.
+- `POST /auth/refresh` — `{ refreshToken }`; returns a fresh access token. Fails for deactivated users or revoked/rotated tokens.
 - `POST /auth/logout` — authenticated; revokes the stored refresh token.
+- `POST /auth/signup` — **disabled** (always `403`). Accounts are created by a Super Admin via `POST /users`.
 
-## Appointments and doctors
+## Users (Super Admin only)
 
-- `GET /doctors` — authenticated doctor directory.
-- `POST /doctors` — Super Admin only; create a linked profile for an active DOCTOR account, including weekly sessions.
-- `GET /slots?doctorId=<id>&date=YYYY-MM-DD` — authenticated availability.
-- `GET /appointments` — authenticated and paginated; doctor role is restricted to their own schedule.
-- `POST /appointments` — Super Admin/Receptionist; creates a patient if requested, verifies the slot against doctor schedule, and blocks duplicate reservations.
-- `PUT /appointments/:id` — Super Admin/Receptionist update visit fields; assigned doctor may update notes or mark complete.
-- `POST /appointments/:id/arrive` and `DELETE /appointments/:id` — Super Admin/Receptionist.
+- `GET /users` — list accounts (no password hashes).
+- `POST /users` — `{ name, email, password (≥10 chars), role }`.
+- `PATCH /users/:id` — any of `name`, `password`, `role`, `isActive`. Rules: you cannot demote or deactivate yourself, and the last active Super Admin cannot be demoted or deactivated. Changing the password or role, or deactivating, revokes the user's refresh token.
 
-## Patients and users
+## Doctors and availability
 
-- `GET /patients?search=<name|mobile|patientId>&page=1&limit=10` — authenticated; doctors receive only patients with an appointment relationship.
-- `POST /patients` — Super Admin/Receptionist; validates registration fields.
-- `GET /patients/:id` — authenticated; doctor authorization is checked against appointments.
-- `POST /patients/:id/clinical-notes` — assigned doctor only; note must reference that doctor's appointment.
-- `GET /users`, `POST /users`, `PATCH /users/:id` — Super Admin only.
-- `GET /dashboard/stats` — authenticated role-aware system totals.
+- `GET /doctors` — authenticated directory (`userId` populated with `name`, `email`, `isActive`).
+- `POST /doctors` — Super Admin; create a profile for an active `DOCTOR` account (`userId`, `department`, `specialization`, optional `schedule`).
+- `PATCH /doctors/:id` — Super Admin; update `department`, `specialization` and/or `schedule` of any doctor.
+- `GET /doctors/me` — Doctor; own profile and schedule (`404` if no profile is linked).
+- `PATCH /doctors/me/availability` — Doctor; `{ schedule }`. A doctor can only change their own schedule.
 
-Validation errors are HTTP 400, unauthenticated requests 401, forbidden roles 403, missing resources 404, and duplicate slot/email/mobile conflicts 409. This starter is not a production API security assessment.
+A `schedule` is an array of `{ dayOfWeek, slotDurationMinutes (5–120), sessions: [{ startTime, endTime }], breaks: [{ startTime, endTime, title? }] }` with `HH:mm` times. Validation rejects an end time not after its start, duplicate days and malformed values. Editing a schedule never modifies existing appointments.
+
+## Slots
+
+- `GET /slots?doctorId=<id>&date=YYYY-MM-DD` — authenticated. Returns `data: [{ startTime, endTime, isAvailable }]` and an optional `message` explaining why a day has no (or no free) slots (doctor off that weekday, inactive doctor, past date, invalid date, all booked). Slots overlapping a break are excluded; booked slots are returned with `isAvailable: false`. `404` for an unknown doctor, `400` if a parameter is missing.
+
+## Appointments
+
+- `GET /appointments` — authenticated, paginated (`page`, `limit` ≤ 100). Filters: `doctorId`, `department`, `status`, `date`, `search` (patient name / mobile / patient ID), `upcoming=true` (today or later, status Scheduled/Arrived). Doctors only ever receive their own appointments.
+- `POST /appointments` — Super Admin/Receptionist. `{ patientType: "EXISTING" | "NEW", patientId | patientDetails, doctorId, appointmentDate, slotStartTime, slotEndTime, purpose }`. The slot is validated against the doctor's saved schedule **before** anything is created (no orphan patients). Errors: `409` slot unavailable/booked/outside hours/break/past date/inactive doctor, or duplicate mobile for a new patient; `404` unknown doctor or patient.
+- `PUT /appointments/:id` — Super Admin/Receptionist may update `purpose`, `notes`, `status`; the assigned doctor may update `notes` or set `status: "Completed"` (not on a cancelled appointment).
+- `POST /appointments/:id/arrive` — Super Admin/Receptionist; only `Scheduled` → `Arrived`.
+- `POST /appointments/:id/reschedule` — Super Admin/Receptionist; `{ appointmentDate, slotStartTime, slotEndTime }`; the new slot is validated like a new booking; completed/cancelled appointments cannot be rescheduled.
+- `DELETE /appointments/:id` — Super Admin/Receptionist; cancels (status → `Cancelled`); a completed appointment cannot be cancelled.
+
+## Patients and clinical notes
+
+- `GET /patients?search=<name|mobile|patientId|email>&page=1&limit=10` — authenticated; doctors receive only patients they have an appointment with.
+- `POST /patients` — Super Admin/Receptionist; the patient ID is generated by the server.
+- `GET /patients/:id` — authenticated. Doctors: only patients with an appointment relationship, and only their own appointments and clinical notes. Receptionists: `clinicalNotes` is always empty. Super Admin: everything.
+- `PATCH /patients/:id` — Super Admin/Receptionist; any of `name`, `mobile`, `email`, `age`, `gender`, `medicalHistory` (unknown fields such as `patientId` are rejected; duplicate mobile → `409`).
+- `POST /patients/:id/clinical-notes` — Doctor only; the note must reference that doctor's own appointment for that patient.
+- `PATCH /patients/:id/clinical-notes/:noteId` — Doctor only, and only for notes they authored.
+
+## Dashboard
+
+- `GET /dashboard/stats` — authenticated, role-aware: appointment totals and per-status counts (doctors: own appointments only); patient, doctor and active-user totals for Super Admin.
+
+## Status codes
+
+`400` validation / malformed id · `401` missing, invalid or expired token · `403` forbidden role or resource · `404` not found · `409` conflict (slot, email, mobile, state) · `429` rate limit (200 requests / 15 min / IP). This prototype has not had a production security assessment.

@@ -9,3 +9,19 @@ coverage/
 !/server/.env.example
 npm-debug.log*
 .DS_Store
+
+# Logs
+*.log
+logs/
+
+# Editor / OS files
+.vscode/
+.idea/
+Thumbs.db
+
+# Temporary and local-only files
+*.tmp
+*.tsbuildinfo
+client/dev-dist/
+*.sqlite
+data/db/

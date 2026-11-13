@@ -36,30 +36,16 @@ describe("EMR API safety and availability", () => {
     expect(response.status).toBe(404);
   });
 
-  test("signup endpoint creates a new user account", async () => {
-    User.create.mockResolvedValue({
-      _id: "64f8c1c8d1234567890abcd1",
-      name: "New Staff User",
-      email: "newuser@example.com",
-      role: "RECEPTIONIST",
-      save: jest.fn().mockResolvedValue(true),
-    });
-
+  test("public signup is disabled and creates no account", async () => {
     const response = await request(app).post("/api/v1/auth/signup").send({
       name: "New Staff User",
       email: "newuser@example.com",
       password: "StrongPassword123",
-      role: "RECEPTIONIST",
+      role: "DOCTOR",
     });
 
-    expect(response.status).toBe(201);
-    expect(response.body.success).toBe(true);
-    expect(response.body.data.user.email).toBe("newuser@example.com");
-    expect(User.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        email: "newuser@example.com",
-        role: "RECEPTIONIST",
-      }),
-    );
+    expect(response.status).toBe(403);
+    expect(response.body.data).toBeUndefined();
+    expect(User.create).not.toHaveBeenCalled();
   });
 });

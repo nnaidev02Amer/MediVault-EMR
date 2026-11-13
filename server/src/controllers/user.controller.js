@@ -90,6 +90,12 @@ const updateUser = async (req, res, next) => {
             message: "At least one active Super Admin account must remain",
           });
     }
+    if (
+      updates.password ||
+      updates.isActive === false ||
+      (updates.role && updates.role !== target.role)
+    )
+      updates.refreshToken = null; // force re-login after sensitive changes
     const user = await User.findByIdAndUpdate(req.params.id, updates, {
       new: true,
       runValidators: true,

@@ -5,6 +5,8 @@ const validate = require("../middleware/validate.middleware");
 const {
   createPatientSchema,
   clinicalNoteSchema,
+  updatePatientSchema,
+  updateClinicalNoteSchema,
 } = require("../validators/schemas");
 const patientController = require("../controllers/patient.controller");
 
@@ -17,6 +19,18 @@ router.post(
   patientController.createPatient,
 );
 router.get("/:id", patientController.getPatient);
+router.patch(
+  "/:id",
+  authorize("SUPER_ADMIN", "RECEPTIONIST"),
+  validate(updatePatientSchema),
+  patientController.updatePatient,
+);
+router.patch(
+  "/:id/clinical-notes/:noteId",
+  authorize("DOCTOR"),
+  validate(updateClinicalNoteSchema),
+  patientController.updateClinicalNote,
+);
 router.post(
   "/:id/clinical-notes",
   authorize("DOCTOR"),

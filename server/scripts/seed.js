@@ -8,6 +8,12 @@ dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 const MONGO_URI = process.env.MONGO_URI || process.env.MONGODB_URI;
 
+// ============================================================================
+// LOCAL DEMO ONLY - development accounts with publicly documented passwords.
+// Never run this against a shared, staging or production database, and change
+// or delete these accounts before any real use. (Seeding is blocked when
+// NODE_ENV=production.) All data is synthetic.
+// ============================================================================
 const seedAccounts = [
   {
     name: "Super Admin User",
@@ -84,6 +90,7 @@ const seedDatabase = async () => {
     }
 
     console.log("Database seeded successfully!");
+    console.log("NOTE: demo credentials are for LOCAL DEVELOPMENT ONLY - see README.");
   } catch (error) {
     console.error("Error seeding database:", error.message);
     process.exitCode = 1;

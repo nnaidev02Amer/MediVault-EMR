@@ -22,7 +22,9 @@ const authenticate = async (req, res, next) => {
           message: "Authentication secret is not configured",
         });
     }
-    const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET, {
+      algorithms: ["HS256"],
+    });
     const user = await User.findById(decoded.id).select(
       "name email role isActive",
     );
